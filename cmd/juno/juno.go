@@ -56,7 +56,6 @@ const (
 	pprofHostF                          = "pprof-host"
 	pprofPortF                          = "pprof-port"
 	colourF                             = "colour"
-	preLatestPollIntervalF              = "prelatest-poll-interval"
 	preConfirmedPollIntervalF           = "preconfirmed-poll-interval"
 	p2pF                                = "p2p"
 	p2pAddrF                            = "p2p-addr"
@@ -123,7 +122,6 @@ const (
 	defaultPprof                              = false
 	defaultPprofPort                          = 6062
 	defaultColour                             = true
-	defaultPreLatestPollInterval              = time.Second
 	defaultPreConfirmedPollInterval           = 500 * time.Millisecond
 	defaultP2p                                = false
 	defaultP2pAddr                            = ""
@@ -196,9 +194,7 @@ const (
 	colourUsage                           = "Use `--colour=false` command to disable colourized outputs (ANSI Escape Codes)."
 	ethNodeUsage                          = "WebSocket endpoint of the Ethereum node. To verify the correctness of the L2 chain, " +
 		"Juno must connect to an Ethereum node and parse events in the Starknet contract."
-	disableL1VerificationUsage = "Disables L1 verification since an Ethereum node is not provided."
-	preLatestPollIntervalUsage = "Sets polling interval for pre-latest block updates. " +
-		"(0s will disable polling)."
+	disableL1VerificationUsage    = "Disables L1 verification since an Ethereum node is not provided."
 	preConfirmedPollIntervalUsage = "Sets how frequently pre_confirmed block will be updated" +
 		"(0s will disable fetching of pre_confirmed block)."
 	p2pUsage           = "EXPERIMENTAL: Enables p2p server."
@@ -474,9 +470,6 @@ func NewCmd(config *node.Config, run func(*cobra.Command, []string) error) *cobr
 
 	// --- Sync & Polling ---
 	junoCmd.Flags().Duration(
-		preLatestPollIntervalF, defaultPreLatestPollInterval, preLatestPollIntervalUsage,
-	)
-	junoCmd.Flags().Duration(
 		preConfirmedPollIntervalF, defaultPreConfirmedPollInterval, preConfirmedPollIntervalUsage,
 	)
 	junoCmd.Flags().String(remoteDBF, defaultRemoteDB, remoteDBUsage)
@@ -484,8 +477,7 @@ func NewCmd(config *node.Config, run func(*cobra.Command, []string) error) *cobr
 		readinessBlockToleranceF, defaultReadinessBlockTolerance, readinessBlockToleranceUsage,
 	)
 	setCategory(junoCmd, catSyncPolling,
-		preLatestPollIntervalF, preConfirmedPollIntervalF,
-		remoteDBF, readinessBlockToleranceF,
+		preConfirmedPollIntervalF, remoteDBF, readinessBlockToleranceF,
 	)
 
 	// --- Gateway ---
