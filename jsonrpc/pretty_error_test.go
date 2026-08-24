@@ -101,7 +101,7 @@ var parseErrorTests = map[string]struct {
 
 	"error exactly at the window start still draws the marker": {
 		req: `{"jsonrpc": 5, "method": "x", "params": [` + strings.Repeat(`"0x1", `, 66) + strings.Repeat(" ", 5) + `"0x2"], "id": 1}`,
-		res: `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"5, \"method\": \"x\", \"params\": [\"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x...\n^\nfield \"jsonrpc\" should be string, got number [line 1, position 1]"},"id":null}`,
+		res: `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"5, \"method\": \"x\", \"params\": [\"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x...\n^\nfield \"jsonrpc\" should be string, got number [line 1, position 13]"},"id":null}`,
 	},
 
 	"long line is windowed": {
@@ -153,9 +153,19 @@ var parseErrorTests = map[string]struct {
 		res: `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"\"0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7\",\n\"0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7\",\n\"0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7\",\n\"0xbad\" \"0x1\"\n        ^\nunexpected '\"', expected ',' or ']' [line 42, position 9]"},"id":null}`,
 	},
 
+	"long single-line request reports the true column": {
+		req: `{"jsonrpc": "2.0", "method": "test", "params": [` + strings.Repeat(`"0x1", `, 80) + `"0x1" "0x2"], "id": 1}`,
+		res: `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"...\", \"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x1\", \"0x1\" \"0x2\"], \"id\": 1}\n                                                             ^\nunexpected '\"', expected ',' or ']' [line 1, position 615]"},"id":null}`,
+	},
+
+	"column counts evicted runes not bytes": {
+		req: `{"a": "` + strings.Repeat("👍", 140) + `" @}`,
+		res: `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"...👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍👍\" @}\n                                                                           ^\nunexpected '@', expected ',' or '}' [line 1, position 150]"},"id":null}`,
+	},
+
 	"oversized single-line input keeps only the trailing window": {
 		req: `{"jsonrpc": "2.0", "method": "starknet_call", "params": [` + strings.Repeat(`"0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7", `, 10) + `"0xbad" @]}`,
-		res: `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"...36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7\", \"0xbad\" @]}\n                                                                          ^\nunexpected '@', expected ',' or ']' [line 1, position 510]"},"id":null}`,
+		res: `{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"...36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7\", \"0xbad\" @]}\n                                                                          ^\nunexpected '@', expected ',' or ']' [line 1, position 766]"},"id":null}`,
 	},
 
 	"context is capped at three lines within the window": {

@@ -22,6 +22,9 @@ type windowBuffer struct {
 	window        []byte
 	consumedBytes int
 	newlinesSeen  int
+	// Runes evicted from the window since the last evicted '\n', i.e. how much
+	// of the start of the window's oldest line has been dropped
+	evictedLineRunes int
 }
 
 func (c *windowBuffer) Write(p []byte) (int, error) {
@@ -29,16 +32,39 @@ func (c *windowBuffer) Write(p []byte) (int, error) {
 	c.newlinesSeen += bytes.Count(p, []byte{'\n'})
 
 	if len(p) >= maxWindowSize {
+		c.evict(c.window)
+		c.evict(p[:len(p)-maxWindowSize])
 		c.window = append(c.window[:0], p[len(p)-maxWindowSize:]...)
 		return len(p), nil
 	}
 
 	if overflow := len(c.window) + len(p) - maxWindowSize; overflow > 0 {
+		c.evict(c.window[:overflow])
 		c.window = c.window[:copy(c.window, c.window[overflow:])]
 	}
 	c.window = append(c.window, p...)
 
 	return len(p), nil
+}
+
+func (c *windowBuffer) evict(dropped []byte) {
+	if i := bytes.LastIndexByte(dropped, '\n'); i >= 0 {
+		c.evictedLineRunes = runeLen(dropped[i+1:])
+	} else {
+		c.evictedLineRunes += runeLen(dropped)
+	}
+}
+
+// runeLen counts runes by skipping UTF-8 continuation bytes, so counts of
+// adjacent fragments add up even when a rune is split between them
+func runeLen(b []byte) int {
+	n := 0
+	for _, x := range b {
+		if utf8.RuneStart(x) {
+			n++
+		}
+	}
+	return n
 }
 
 func errorOffset(inputLength int, err error) (offset int, ok bool) {
@@ -58,11 +84,18 @@ func errorOffset(inputLength int, err error) (offset int, ok bool) {
 	}
 }
 
-func lineAndColumn(c *windowBuffer, markerPos int) (line, col int) {
+// Returns the position of markerPos in the input: col is the true column in
+// the line, windowCol counts only from the window start (for drawing, when the
+// start of the line was evicted from the window)
+func lineAndColumn(c *windowBuffer, markerPos int) (line, col, windowCol int) {
 	line = c.newlinesSeen - bytes.Count(c.window[markerPos:], []byte{'\n'}) + 1
 	lineStart := bytes.LastIndexByte(c.window[:markerPos], '\n') + 1
-	col = utf8.RuneCount(c.window[lineStart:markerPos]) + 1
-	return line, col
+	windowCol = runeLen(c.window[lineStart:markerPos]) + 1
+	col = windowCol
+	if lineStart == 0 {
+		col += c.evictedLineRunes
+	}
+	return line, col, windowCol
 }
 
 func expectedToken(reason string) (string, bool) {
@@ -204,8 +237,8 @@ func prettyParseError(c *windowBuffer, err error) string {
 	}
 
 	markerPos := absOffset - windowStart
-	line, col := lineAndColumn(c, markerPos)
+	line, col, windowCol := lineAndColumn(c, markerPos)
 	msg := fmt.Sprintf("%s [line %d, position %d]", describeError(c.window, markerPos, err), line, col)
 
-	return drawMarker(c.window, windowStart, markerPos, col, msg)
+	return drawMarker(c.window, windowStart, markerPos, windowCol, msg)
 }
